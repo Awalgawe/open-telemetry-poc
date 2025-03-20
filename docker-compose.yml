@@ -1,0 +1,68 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      - telemetry-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "11000:16686"
+    networks:
+      - telemetry-network
+
+  api:
+    image: node:18
+    container_name: api
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+    ports:
+      - "10000:3000"
+    command: "npm run dev"
+    depends_on:
+      - redis
+      - jaeger
+    networks:
+      - telemetry-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    networks:
+      - telemetry-network
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: telemetry
+    networks:
+      - telemetry-network
+
+  cerebro:
+    image: lmenezes/cerebro:latest
+    container_name: cerebro
+    command:
+      [
+        "-Dhosts.0.host=http://elasticsearch:9200",
+        "-Dhosts.0.name=Cluster Elasticsearch",
+      ]
+
+    ports:
+      - "9000:9000"
+    depends_on:
+      - elasticsearch
+    networks:
+      - telemetry-network
+
+networks:
+  telemetry-network:
+    driver: bridge
